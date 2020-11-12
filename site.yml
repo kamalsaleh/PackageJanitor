@@ -906,6 +906,23 @@
           - time
           - python-pathlib
 
+- name: NConvex
+  hosts: NConvex
+  connection: local
+  vars:
+    pkg_dir: "~/.gap/pkg/"
+  tasks:
+    - import_tasks: tasks/package.yml
+      vars:
+        package:
+          name: NConvex
+          description: "A Gap package to perform polyhedral computations"
+          needed_other_repositories:
+            - homalg_project
+            - CddInterface
+            - gap-packages/NormalizInterface
+          tests_only_basic: true
+
 - name: homalg-project.github.io
   hosts: homalg-project.github.io
   connection: local
