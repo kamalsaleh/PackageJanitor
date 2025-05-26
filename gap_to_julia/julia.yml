@@ -1,0 +1,119 @@
+---
+- name: Create a local Julia package
+  hosts: localhost
+  vars:
+    project_name: CategoricalTowers.jl
+    package_name: ToolsForCategoricalTowers
+    package_description: Tools for CategoricalTowers
+    package_uuid: e2cf920d-0824-4cbb-97bb-0be40824f89f
+    authors:
+      - name: "Kamal Saleh"
+        email: "kamal.saleh@rwth-aachen.de"
+      - name: "Mohamed Barakat"
+        email: "mohamed.barakat@rwth-aachen.de"
+    package_version: 0.0.1
+    julia_version: 1.11
+    dependencies:
+      CAP: 0.5
+      MonoidalCategories:
+      CartesianCategories:
+    weak_dependencies:
+    extras:
+      - Documenter
+      - Test
+      - Toposes
+      - FinSetsForCAP
+      - MatricesForHomalg
+      - FreydCategoriesForCAP
+    targets:
+      test: default
+  tasks:
+    - name: Set the parent directory for the Julia package
+      set_fact:
+        parent_directory: ~/.julia/dev/{{ project_name }}
+
+    - name: Ensure the parent directory exists
+      file:
+        path: "{{ parent_directory }}"
+        state: directory
+        mode: '0755'
+
+    - name: Check whether the Julia package directory already exists
+      stat:
+        path: "{{ parent_directory }}/{{ package_name }}"
+      register: package_directory
+
+    - name: Generate Julia package using Pkg.generate if it does not exist
+      command: >
+        julia -e "using Pkg; Pkg.generate(\"{{ package_name }}\")"
+      args:
+        chdir: "{{ parent_directory }}"
+      when: package_directory.stat.exists == false
+      register: generate_output
+
+    - name: Add Makefile to package
+      template:
+        src: makefile.j2
+        dest: "{{ parent_directory }}/{{ package_name }}/makefile"
+        mode: '0644'
+
+    - name: Find the UUIDs of dependencies
+      shell: julia -e 'using Pkg; packages= {{ dependencies_names }}; uuids = join([name * " = \"" * string(uuid) * "\"" for name in packages for (uuid, package) in Pkg.dependencies() if package.name == name], "\n"); println(uuids)'
+      when: dependencies
+      register: dependencies_uuids
+      changed_when: false
+      vars:
+        dependencies_names: "{{ dependencies.keys() | list | to_json }}"
+
+    - name: Find the UUIDs of weak_dependencies
+      shell: julia -e 'using Pkg; packages= {{ weak_dependencies_names }}; uuids = join([name * " = \"" * string(uuid) * "\"" for name in packages for (uuid, package) in Pkg.dependencies() if package.name == name], "\n"); println(uuids)'
+      when: weak_dependencies
+      register: weak_dependencies_uuids
+      changed_when: false
+      vars:
+        weak_dependencies_names: "{{ weak_dependencies.keys() | list | to_json }}"
+
+    - name: Find the UUIDs of extras
+      shell: julia -e 'using Pkg; packages= {{ extras_names }}; uuids = join([name * " = \"" * string(uuid) * "\"" for name in packages for (uuid, package) in Pkg.dependencies() if package.name == name], "\n"); println(uuids)'
+      when: extras
+      register: extras_uuids
+      changed_when: false
+      vars:
+        extras_names: "{{ extras | to_json }}"
+
+    - name: Add Project.toml to package
+      template:
+        src: Project.toml.j2
+        dest: "{{ parent_directory }}/{{ package_name }}/Project.toml"
+        mode: '0644'
+
+    - name: Add README.md to package
+      template:
+        src: README.md.j2
+        dest: "{{ parent_directory }}/{{ package_name }}/README.md"
+        mode: '0644'
+
+    - name: Make sure the directory test exists
+      file:
+        path: "{{ parent_directory }}/{{ package_name }}/test"
+        state: directory
+        mode: '0755'
+
+    - name: Make sure the directory docs/src exists
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      with_items:
+        - "{{ parent_directory }}/{{ package_name }}/docs"
+        - "{{ parent_directory }}/{{ package_name }}/docs/src"
+
+    - name: Add runtests.jl in test directory
+      template:
+        src: runtests.jl.j2
+        dest: "{{ parent_directory }}/{{ package_name }}/test/runtests.jl"
+        mode: '0644'
+
+    - name: Display success message
+      debug:
+        msg: "Julia package '{{ package_name }}' created in '{{ parent_directory }}'"

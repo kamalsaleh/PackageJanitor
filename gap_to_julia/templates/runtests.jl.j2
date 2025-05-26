@@ -1,0 +1,9 @@
+{% if targets.test == "default" %}
+{% set targets_test = extras | join(', ') %}
+{% else %}
+{% set targets_test = targets.test | join(', ') %}
+{% endif %}
+using {{ targets_test }}
+using {{ package_name }}
+
+doctest({{ package_name }}; doctestfilters=[r"\s+" => " "], fix=false) # fix=true overwrites the output strings
