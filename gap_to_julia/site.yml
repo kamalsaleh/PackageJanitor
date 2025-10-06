@@ -275,6 +275,7 @@
           source: CAP_project
           target: CAP_project.jl
           dependencies:
+            - MatricesForHomalg
             - CAP
             - LinearAlgebraForCAP
             - AdditiveClosuresForCAP
@@ -283,7 +284,6 @@
           extras:
             - Test
             - Documenter
-            - MatricesForHomalg
           targets:
             test: default
           test_imports:
