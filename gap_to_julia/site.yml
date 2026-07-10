@@ -34,6 +34,35 @@
             - HomalgFieldOfRationalsInSingular
             - SimplifySourceAndRange
 
+- name: Bicomplexes
+  hosts: Bicomplexes
+  connection: local
+  tasks:
+    - import_tasks: tasks/julia_package.yml
+      vars:
+        package:
+          name: Bicomplexes
+          source: HigherHomologicalAlgebra
+          target: HigherHomologicalAlgebra.jl
+          dependencies:
+            - CAP
+            - ComplexesCategories
+          weak_dependencies:
+          extras:
+            - Test
+            - Documenter
+          targets:
+            test: default
+          test_imports:
+            - CAP
+            - ComplexesCategories
+            - Bicomplexes
+          import_dependencies: true
+          pre_init_file_exists: false
+          post_init_file_exists: false
+          cleanup_test_files_by_keywords:
+            - drop_example_in_Julia
+
 - name: CAP
   hosts: CAP
   connection: local
@@ -97,6 +126,91 @@
           import_dependencies: true
           pre_init_file_exists: false
           post_init_file_exists: false
+          cleanup_test_files_by_keywords:
+            - drop_example_in_Julia
+
+- name: ComplexesCategories
+  hosts: ComplexesCategories
+  connection: local
+  tasks:
+    - import_tasks: tasks/julia_package.yml
+      vars:
+        package:
+          name: ComplexesCategories
+          source: HigherHomologicalAlgebra
+          target: HigherHomologicalAlgebra.jl
+          dependencies:
+            - MatricesForHomalg
+            - CAP
+            - PresheafCategories
+            - AdditiveClosuresForCAP
+            - FreydCategoriesForCAP
+          weak_dependencies:
+          extras:
+            - Test
+            - Documenter
+          targets:
+            test: default
+          test_imports:
+            - CAP
+            - PresheafCategories
+            - ComplexesCategories
+          import_dependencies: true
+          pre_init_file_exists: true
+          post_init_file_exists: true
+          cleanup_test_files_by_keywords:
+            - drop_example_in_Julia
+
+- name: DerivedCategories
+  hosts: DerivedCategories
+  connection: local
+  tasks:
+    - import_tasks: tasks/julia_package.yml
+      vars:
+        package:
+          name: DerivedCategories
+          source: HigherHomologicalAlgebra
+          target: HigherHomologicalAlgebra.jl
+          dependencies:
+            - MatricesForHomalg
+            - CAP
+            - SubcategoriesForCAP
+            - LinearAlgebraForCAP
+            - FpCategories
+            - FpLinearCategories
+            - LinearClosuresForCAP
+            - AdditiveClosuresForCAP
+            - FreydCategoriesForCAP
+            - PresheafCategories
+            - FunctorCategories
+            - TriangulatedCategories
+            - ComplexesCategories
+            - HomotopyCategories
+          weak_dependencies:
+          extras:
+            - Test
+            - Documenter
+          targets:
+            test: default
+          test_imports:
+            - MatricesForHomalg
+            - CAP
+            - SubcategoriesForCAP
+            - LinearAlgebraForCAP
+            - FpCategories
+            - FpLinearCategories
+            - LinearClosuresForCAP
+            - AdditiveClosuresForCAP
+            - FreydCategoriesForCAP
+            - PresheafCategories
+            - FunctorCategories
+            - TriangulatedCategories
+            - ComplexesCategories
+            - HomotopyCategories
+            - DerivedCategories
+          import_dependencies: true
+          pre_init_file_exists: true
+          post_init_file_exists: true
           cleanup_test_files_by_keywords:
             - drop_example_in_Julia
 
@@ -408,6 +522,55 @@
             - Bialgebroid
             - Comultiplication
             - antipode
+
+- name: HomotopyCategories
+  hosts: HomotopyCategories
+  connection: local
+  tasks:
+    - import_tasks: tasks/julia_package.yml
+      vars:
+        package:
+          name: HomotopyCategories
+          source: HigherHomologicalAlgebra
+          target: HigherHomologicalAlgebra.jl
+          dependencies:
+            - CAP
+            - MatricesForHomalg
+            - LinearAlgebraForCAP
+            - AdditiveClosuresForCAP
+            - LinearClosuresForCAP
+            - FpCategories
+            - FpLinearCategories
+            - ComplexesCategories
+            - TriangulatedCategories
+            - QuotientCategories
+            - SubcategoriesForCAP
+            - FreydCategoriesForCAP
+          weak_dependencies:
+          extras:
+            - Test
+            - Documenter
+          targets:
+            test: default
+          test_imports:
+            - CAP
+            - MatricesForHomalg
+            - LinearAlgebraForCAP
+            - AdditiveClosuresForCAP
+            - LinearClosuresForCAP
+            - FpCategories
+            - FpLinearCategories
+            - ComplexesCategories
+            - TriangulatedCategories
+            - QuotientCategories
+            - SubcategoriesForCAP
+            - FreydCategoriesForCAP
+            - HomotopyCategories
+          import_dependencies: true
+          pre_init_file_exists: true
+          post_init_file_exists: true
+          cleanup_test_files_by_keywords:
+            - drop_example_in_Julia
 
 - name: LinearAlgebraForCAP
   hosts: LinearAlgebraForCAP
@@ -768,6 +931,33 @@
           cleanup_test_files_by_keywords:
             - drop_example_in_Julia
             - LazyCategory
+
+- name: TriangulatedCategories
+  hosts: TriangulatedCategories
+  connection: local
+  tasks:
+    - import_tasks: tasks/julia_package.yml
+      vars:
+        package:
+          name: TriangulatedCategories
+          source: HigherHomologicalAlgebra
+          target: HigherHomologicalAlgebra.jl
+          dependencies:
+            - CAP
+          weak_dependencies:
+          extras:
+            - Test
+            - Documenter
+          targets:
+            test: default
+          test_imports:
+            - CAP
+            - TriangulatedCategories
+          import_dependencies: true
+          pre_init_file_exists: false
+          post_init_file_exists: false
+          cleanup_test_files_by_keywords:
+            - drop_example_in_Julia
 
 - name: ZXCalculusForCAP
   hosts: ZXCalculusForCAP
