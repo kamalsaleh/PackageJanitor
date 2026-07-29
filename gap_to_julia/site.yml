@@ -351,6 +351,7 @@
             - ToolsForCategoricalTowers
             - QuotientCategories
             - FinSetsForCAP
+            - Toposes
           weak_dependencies:
           extras:
             - Test
