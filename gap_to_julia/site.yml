@@ -710,6 +710,27 @@
             - Bialgebroid
             - Comultiplication
             - antipode
+          ci_test_groups:
+            - group: SubobjectClassifier_TerminalCategory_YonedaComposition
+              files:
+                - SubobjectClassifier.g.md
+                - TerminalCategory.g.md
+                - YonedaComposition.g.md
+            - group: StreamVortexSystemBig
+              files:
+                - StreamVortexSystemBig.g.md
+            - group: StreamVortexSystem
+              files:
+                - StreamVortexSystem.g.md
+                - StreamVortexSystemLinear.g.md
+            - group: PreSheaves
+              files:
+                - Weierstrass.g.md
+                - PreSheaves.md
+                - presheaves_of_algebroid_from_data_tables.g.md
+            - group: AutoDocTests
+              files:
+                - AutoDocTests.tst.autogen.md
 
 - name: HomotopyCategories
   hosts: HomotopyCategories

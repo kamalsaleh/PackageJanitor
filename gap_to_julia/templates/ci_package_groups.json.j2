@@ -1,0 +1,8 @@
+{
+  "_comment": "Groups of packages tested together in one CI job (see workflows/Test.yml). Edit freely to rebalance CI jobs as packages are added/removed or change in cost.",
+  "packages": [
+{% for package in monorepo.packages %}
+    ["{{ package }}"]{{ "," if not loop.last }}
+{% endfor %}
+  ]
+}

@@ -21,6 +21,7 @@
     disable_method_overwrite_warning: "{{ package.disable_method_overwrite_warning | default(false) }}"
     cleanup_test_files_by_keywords: "{{ package.cleanup_test_files_by_keywords | default([], true) }}"
     extra_bash_commands: "{{ package.extra_bash_commands | default([], true) }}"
+    ci_test_groups: "{{ package.ci_test_groups | default([], true) }}"
     playbook_dir_relative_to_home: "{{ playbook_dir | relpath(ansible_facts.env.HOME) }}"
     gen_basic: "{{ gen_basic | default('0') }}"
 
@@ -393,6 +394,25 @@
   loop: '{{ extra_bash_commands }}'
   when: extra_bash_commands | length > 0
   changed_when: false
+
+- name: Add docs/src/ci_test_groups.json
+  template:
+    src: ci_test_groups.json.j2
+    dest: "{{ target_package_path }}/docs/src/ci_test_groups.json"
+    mode: '0644'
+  when: gen_basic == '0' and ci_test_groups | length > 0
+
+- name: Remove docs/src/ci_test_groups.json if no ci_test_groups are configured
+  file:
+    path: "{{ target_package_path }}/docs/src/ci_test_groups.json"
+    state: absent
+  when: gen_basic == '0' and ci_test_groups | length == 0
+
+- name: Fail if a file listed in ci_test_groups does not exist in docs/src
+  fail:
+    msg: "'{{ item }}' is listed in ci_test_groups of {{ package_name }} but does not exist in '{{ target_package_path }}/docs/src'"
+  when: not ((target_package_path ~ '/docs/src/' ~ item) is file)
+  loop: "{{ ci_test_groups | map(attribute='files') | flatten }}"
 
 - name: Display success message
   debug:

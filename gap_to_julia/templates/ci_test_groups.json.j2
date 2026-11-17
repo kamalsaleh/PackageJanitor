@@ -1,0 +1,8 @@
+{
+  "_comment": "CI jobs testing only the listed docs/src files (see .github/workflows/Test.yml in the monorepo). Generated from `ci_test_groups` in PackageJanitor/gap_to_julia/site.yml, do not edit. Files in docs/src which are not listed here are tested in an additional job.",
+  "groups": [
+{% for group in ci_test_groups %}
+    { "group": {{ group.group | to_json }}, "files": {{ group.files | to_json }} }{{ "," if not loop.last }}
+{% endfor %}
+  ]
+}

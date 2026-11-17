@@ -1,0 +1,262 @@
+name: Run Julia Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  schedule:
+    - cron: "0 0 * * *"  # Run every day at midnight
+{% if monorepo.workflow_dispatch | default(false) %}
+  workflow_dispatch:
+{% endif %}
+permissions:
+  contents: write
+
+# cancel runs for pull requests on force push
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#example-using-a-fallback-value
+concurrency:
+  group: ${{ '{{' }} github.workflow }}-${{ '{{' }} github.event.pull_request.number || github.run_id }}-${{ '{{' }} github.run_attempt }}
+  cancel-in-progress: true
+
+jobs:
+  prepare_matrices:
+    name: Load CI test group config
+    runs-on: ubuntu-latest
+    outputs:
+      package_groups: ${{ '{{' }} steps.load.outputs.package_groups }}
+      split_groups: ${{ '{{' }} steps.load.outputs.split_groups }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Load CI test group config
+        id: load
+        run: |
+          set -o pipefail
+
+          # a package opts into split testing via its docs/src/ci_test_groups.json
+          # (generated from `ci_test_groups` in PackageJanitor's site.yml); files in
+          # docs/src not listed in any group are tested in an extra "remaining" job
+          shopt -s nullglob
+          split_groups=$(
+            for config_path in */docs/src/ci_test_groups.json; do
+              package="${config_path%%/*}"
+              all_files=$(printf '%s\n' "$package"/docs/src/*.md | jq -Rnc '[inputs | select(. != "") | sub(".*/"; "")]')
+              jq -c --arg package "$package" --argjson all_files "$all_files" '
+                ($all_files - [.groups[].files[]]) as $remaining
+                | .groups + (if $remaining == [] then [] else [{group: "remaining", files: $remaining}] end)
+                | .[] | . + {package: $package}
+              ' "$config_path"
+            done | jq -cs '.'
+          )
+
+          # packages tested by the split jobs are not tested again as a whole
+          package_groups=$(jq -c --argjson split_groups "$split_groups" '
+            ($split_groups | map(.package)) as $split_packages
+            | .packages | map(. - $split_packages | select(length > 0))
+          ' .github/ci_package_groups.json)
+
+          echo "package_groups=$package_groups" >> "$GITHUB_OUTPUT"
+          echo "split_groups=$split_groups" >> "$GITHUB_OUTPUT"
+
+          echo "package_groups:"
+          echo "$package_groups" | jq '.'
+          echo "split_groups:"
+          echo "$split_groups" | jq '.'
+
+  test:
+    needs: prepare_matrices
+    name: ${{ '{{' }} join(matrix.packages, ', ') }} - Julia ${{ '{{' }} matrix.julia-version }} on ${{ '{{' }} matrix.os }}
+    runs-on: ${{ '{{' }} matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # groups are loaded from .github/ci_package_groups.json by prepare_matrices
+        packages: ${{ '{{' }} fromJson(needs.prepare_matrices.outputs.package_groups) }}
+        julia-version:
+          - '1.12'
+          - 'nightly'
+        os:
+          - ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ '{{' }} matrix.julia-version }}
+{% for dependency in monorepo.ci_dependencies | default([]) %}
+      - name: {{ dependency.name }}
+        run: |
+{{ dependency.run | indent(10, true) }}
+{% endfor %}
+      - name: Install all packages
+        run: make install
+{% if monorepo.notebook_targets | default(false) %}
+      - name: Set up Jupyter
+        run: pip install jupyter nbconvert --quiet
+{% endif %}
+      - name: Run tests
+        run: |
+          for pkg in ${{ '{{' }} join(matrix.packages, ' ') }}; do
+            if [[ "${{ '{{' }} matrix.julia-version }}" == '1.12' ]]; then
+              julia -e "using Pkg; Pkg.test(\"$pkg\"; coverage=true)"
+            else
+              make -C "$pkg" test
+            fi
+          done
+      - name: Process coverage data
+        if: matrix.julia-version == '1.12'
+        uses: julia-actions/julia-processcoverage@v1
+        env:
+          DISABLE_AMEND_COVERAGE_FROM_SRC: 'yes'
+        with:
+          directories: ${{ '{{' }} join(matrix.packages, ',') }}
+      - name: Upload coverage artifact
+        if: matrix.julia-version == '1.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ '{{' }} join(matrix.packages, '-') }}
+          path: lcov.info
+          if-no-files-found: error
+{% if monorepo.notebook_targets | default(false) %}
+      - name: Test notebooks
+        run: |
+          julia -e 'using Pkg; Pkg.add("Singular"); Pkg.add("IJulia"); using IJulia; installkernel("Julia")'
+          sed -i '/"--project=@\\."/d' ~/.local/share/jupyter/kernels/julia-*/kernel.json
+          for pkg in ${{ '{{' }} join(matrix.packages, ' ') }}; do
+            if make -C "$pkg" -n test-notebooks >/dev/null 2>&1; then
+              make -C "$pkg" test-notebooks
+            fi
+          done
+{% endif %}
+
+  coverage:
+    name: Upload combined coverage
+    needs: [test, test_split]
+    if: |
+      always() &&
+      needs.test.result == 'success' &&
+      (needs.test_split.result == 'success' || needs.test_split.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: coverage
+      - name: Install LCOV
+        run: sudo apt-get update && sudo apt-get install --yes lcov
+      - name: Merge coverage reports
+        run: |
+          mapfile -d '' coverage_files < <(find coverage -name lcov.info -print0)
+          test -n "${coverage_files[0]:-}"
+          lcov $(printf ' --add-tracefile %q' "${coverage_files[@]}") --output-file lcov.info
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          disable_search: true
+          token: ${{ '{{' }} secrets.CODECOV_TOKEN }}
+
+  test_split:
+    needs: prepare_matrices
+    # an empty matrix (no package opts into split testing) can hang
+    # instead of being skipped, so skip the job outright in that case
+    if: needs.prepare_matrices.result == 'success' && needs.prepare_matrices.outputs.split_groups != '[]'
+    name: ${{ '{{' }} matrix.group.package }} (${{ '{{' }} matrix.group.group }}) - Julia ${{ '{{' }} matrix.julia-version }} on ${{ '{{' }} matrix.os }}
+    runs-on: ${{ '{{' }} matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # groups are loaded from every */docs/src/ci_test_groups.json by prepare_matrices
+        group: ${{ '{{' }} fromJson(needs.prepare_matrices.outputs.split_groups) }}
+        julia-version:
+          - '1.12'
+          - 'nightly'
+        os:
+          - ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ '{{' }} matrix.julia-version }}
+{% for dependency in monorepo.ci_dependencies | default([]) %}
+      - name: {{ dependency.name }}
+        run: |
+{{ dependency.run | indent(10, true) }}
+{% endfor %}
+      - name: Install all packages
+        run: make install
+      - name: Run tests
+        env:
+          DOCTEST_FILES: ${{ '{{' }} join(matrix.group.files, ',') }}
+        run: |
+          if [[ "${{ '{{' }} matrix.julia-version }}" == '1.12' ]]; then
+            julia -e "using Pkg; Pkg.test(\"${{ '{{' }} matrix.group.package }}\"; coverage=true)"
+          else
+            make -C "${{ '{{' }} matrix.group.package }}" test
+          fi
+      - name: Process coverage data
+        if: matrix.julia-version == '1.12'
+        uses: julia-actions/julia-processcoverage@v1
+        env:
+          DISABLE_AMEND_COVERAGE_FROM_SRC: 'yes'
+        with:
+          directories: ${{ '{{' }} matrix.group.package }}
+      - name: Upload coverage artifact
+        if: matrix.julia-version == '1.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-split-${{ '{{' }} strategy.job-index }}
+          path: lcov.info
+          if-no-files-found: error
+
+  update_subsplits:
+    name: Update subsplits
+    needs: [test, test_split]
+    runs-on: ubuntu-latest
+{% if monorepo.disable_subsplit_updates | default(false) %}
+    if: false  # enable this job when you move the repository to homalg-project
+{% else %}
+    # test_split is allowed to be skipped (e.g. no package opts into split testing)
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      needs.test.result == 'success' &&
+      (needs.test_split.result == 'success' || needs.test_split.result == 'skipped')
+{% endif %}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v3
+        with:
+          version: '1.12'
+      - name: Install all packages
+        run: make install
+      - name: Run update_subsplits script
+        env:
+          JULIA_SUBSPLIT_TOKEN: ${{ '{{' }} secrets.SUBSPLIT_PUSH_SECRET }}
+        run: |
+          ./dev/update_subsplits.sh
