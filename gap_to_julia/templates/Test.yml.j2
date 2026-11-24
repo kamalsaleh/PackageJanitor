@@ -120,7 +120,36 @@ jobs:
             make -C "$PACKAGE" test-notebooks
           fi
 {% endif %}
-  
+
+  coverage:
+    name: Upload combined coverage
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: coverage
+      - name: Install LCOV
+        run: sudo apt-get update && sudo apt-get install --yes lcov
+      - name: Merge coverage reports
+        run: |
+          mapfile -d '' coverage_files < <(find coverage -name lcov.info -print0)
+          test -n "${coverage_files[0]:-}"
+          lcov $(printf ' --add-tracefile %q' "${coverage_files[@]}") --output-file lcov.info
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          disable_search: true
+          token: ${{ '{{' }} secrets.CODECOV_TOKEN }}
+
   update_subsplits:
     name: Update subsplits
     needs: test
